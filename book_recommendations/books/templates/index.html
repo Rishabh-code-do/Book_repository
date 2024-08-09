@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Book Recommendations</title>
+    <link
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  </head>
+  <body>
+    <div class="container mt-5">
+      <h1 class="text-center">Book Recommendation Platform</h1>
+      <div class="row mt-4">
+        <div class="col-md-8 offset-md-2">
+          <div class="input-group mb-3">
+            <input
+              type="text"
+              class="form-control"
+              id="search"
+              placeholder="Search for books..."
+              required
+            />
+            <select id="keys" class="form-control">
+              <option value="">Keyword</option>
+              <option value="subject">Category</option>
+              <option value="author">Author</option>
+            </select>
+            <div class="input-group-append">
+              <button
+                onclick="searchBooks()"
+                class="btn btn-primary"
+                type="submit"
+              >
+                Search
+              </button>
+              <a href="{% url 'recommendations_view' %}">
+                <button
+                  style="margin-left: 40px"
+                  class="btn btn-primary"
+                  type="button"
+                >
+                  View Recommendations
+                </button>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="row" id="books"></div>
+    </div>
+    <script>
+      async function searchBooks() {
+        const query = document.getElementById("search").value;
+        const key = document.getElementById("keys").value;
+        const response =
+          key == ""
+            ? await fetch(`/api/search/?q=${query}`)
+            : await fetch(`/api/search/?q=in${key}:${query}`);
+        const books = await response.json();
+        const booksContainer = document.getElementById("books");
+        booksContainer.innerHTML = "";
+        books.forEach((book) => {
+          let card = `
+                        <div class="m-3" style="width: 100rem;">
+                            <div class="card">
+                                <img src="${
+                                  book.cover_image
+                                }" class="card-img-top h-25 w-25 p-3" alt="${
+            book.title
+          }">
+                                <div class="card-body">
+                                    <h5 class="card-title">${book.title}</h5>
+                                    <p><strong>Author:</strong> ${
+                                      book.author
+                                    }</p>
+                                    <p class="card-text">${
+                                      book.description
+                                        ? book.description
+                                        : "No description available"
+                                    }</p>
+                                    <button class="btn btn-primary recommend-btn" data-book-id="${
+                                      book.google_books_id
+                                    }" onclick="submitRecommendation('${
+            book.google_books_id
+          }')">Recommend</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+          booksContainer.innerHTML += card;
+        });
+      }
+    </script>
+    <script>
+      async function submitRecommendation(bookId) {
+        try {
+          let response = await fetch("/api/submit_recommendation/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({ book_id: bookId }),
+          });
+
+          if (!response.ok) throw new Error("Failed to submit recommendation");
+
+          let data = await response.json();
+          alert(data.message);
+        } catch (error) {
+          alert(error.message);
+        }
+      }
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          let cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+            let cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(
+                cookie.substring(name.length + 1)
+              );
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+    </script>
+  </body>
+</html>

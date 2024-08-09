@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Book Recommendations</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f4f4;
+      }
+      #controls {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 20px;
+      }
+      #book-list {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 20px;
+      }
+      .book-item {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        width: 100%;
+        max-width: 600px;
+        position: relative;
+      }
+      .book-item img {
+        max-width: 100%;
+        border-radius: 4px;
+      }
+      h1 {
+        text-align: center;
+      }
+      .likes {
+        margin-top: 10px;
+      }
+      .likes button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-bottom: 12px;
+      }
+      .likes button.liked {
+        background-color: #28a745;
+      }
+    </style>
+    <script>
+      async function fetchRecommendations(sortBy = "") {
+        try {
+          const response = await fetch(
+            `/api/recommendations/?ordering=${sortBy}`
+          );
+          const data = await response.json();
+          const bookList = document.getElementById("book-list");
+          bookList.innerHTML = "";
+
+          data.forEach((book) => {
+            const user = book.user;
+            const likes = book.likes;
+            const isLiked = book.is_liked_by_user;
+
+            const bookItem = document.createElement("div");
+            bookItem.classList.add("book-item");
+            let commentText = document.getElementById(
+              `comment-input-${book.book.book_id}`
+            );
+            bookItem.innerHTML = `
+                        <h2>${book.book.title}</h2>
+                        <p><strong>Author:</strong> ${book.book.author}</p>
+                        <img src="${
+                          book.book.cover_image ||
+                          "https://via.placeholder.com/150"
+                        }" alt="${book.book.title}">
+                        <p>${book.book.description}</p>
+                        <p><strong>Rating:</strong> ${
+                          book.book.ratings || "N/A"
+                        }</p>
+                        <p><strong>Publication Date:</strong> ${
+                          book.book.publication_date || "N/A"
+                        }</p>
+                        <p><strong>Likes:</strong> ${book.likes || "N/A"}</p>
+                        <div class="likes">
+                            <button class="${
+                              isLiked ? "liked" : ""
+                            }" onclick="toggleLikeBook('${
+              book.book.book_id
+            }','${user}')">
+                                ${isLiked ? "Unlike" : "Like"}
+                            </button>
+                        </div>
+                         <div class="comments">
+        <input type="text" id="comment-input-${
+          book.book.book_id
+        }" placeholder="Add a comment">
+        <button class="submit-comment-button" data-book-id="${
+          book.book.book_id
+        }" data-user-id="${user}">Submit</button>
+        <div id="comment-list-${book.book.book_id}" class="comment-list">
+            ${
+              book.comments.length > 0
+                ? book.comments
+                    .map(
+                      (comment) => `
+                <div class="comment-item">
+                    <p><strong>${comment.name}:</strong> ${comment.comment}</p>
+                </div>
+            `
+                    )
+                    .join("")
+                : "<p>No comments yet.</p>"
+            }
+        </div>
+    </div>
+                    `;
+            bookList.appendChild(bookItem);
+            // Attach event listener to the submit button
+            const submitButton = bookItem.querySelector(
+              ".submit-comment-button"
+            );
+            submitButton.addEventListener("click", (e) => {
+              const bookId = e.target.getAttribute("data-book-id");
+              const userId = e.target.getAttribute("data-user-id");
+              const commentText = document.getElementById(
+                `comment-input-${bookId}`
+              ).value;
+              submitComment(bookId, userId, commentText);
+            });
+          });
+          console.log("Books have been successfully loaded.");
+        } catch (error) {
+          console.error("Error fetching recommendations:", error);
+        }
+      }
+
+      function handleSortChange() {
+        const sortBy = document.getElementById("sortOptions").value;
+        fetchRecommendations(sortBy);
+      }
+
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          let cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+            let cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(
+                cookie.substring(name.length + 1)
+              );
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+
+      async function submitComment(bookId, userId, comment) {
+        if (comment.trim() === "") {
+          alert("Comment cannot be empty");
+          return;
+        }
+        try {
+          const response = await fetch("/api/comments/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({
+              bookId: bookId,
+              user: userId,
+              comment: comment,
+            }),
+          });
+
+          if (response.ok) {
+            location.reload();
+          } else {
+            console.error(
+              "Failed to comment on the book:",
+              await response.json()
+            );
+          }
+        } catch (error) {
+          console.error("Error commenting on the book:", error);
+        }
+      }
+
+      async function toggleLikeBook(bookId, userId) {
+        const button = document.querySelector(
+          `button[onclick="toggleLikeBook('${bookId}', '${userId}')"]`
+        );
+        try {
+          const response = await fetch("/api/likes/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({
+              bookId: bookId,
+              user: userId,
+            }),
+          });
+
+          if (response.ok) {
+            button.textContent = "Unlike";
+            button.classList.add("liked");
+            console.log("Book liked successfully.");
+          } else {
+            console.error("Failed to like the book:", await response.json());
+          }
+        } catch (error) {
+          console.error("Error liking the book:", error);
+        }
+        location.reload();
+      }
+
+      document.addEventListener("DOMContentLoaded", () =>
+        fetchRecommendations()
+      );
+    </script>
+  </head>
+  <body>
+    <h1>Recommended Books</h1>
+    <div id="controls">
+      <div>
+        <label for="sortOptions">Sort By:</label>
+        <select
+          id="sortOptions"
+          class="form-control"
+          onchange="handleSortChange()"
+        >
+          <option value="">Relevance</option>
+          <option value="-book__ratings">Rating: High to Low</option>
+          <option value="book__ratings">Rating: Low to High</option>
+          <option value="-book__publishedDate">
+            Publication Date: Newest First
+          </option>
+          <option value="book__publishedDate">
+            Publication Date: Oldest First
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <div id="book-list"></div>
+  </body>
+</html>
